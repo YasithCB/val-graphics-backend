@@ -33,6 +33,7 @@ app.use((req, res, next) => {
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     email:    { type: String, required: true, unique: true },
+    mobile:   { type: String, required: true },
     password: { type: String, required: true },
 });
 
@@ -52,21 +53,23 @@ const User = mongoose.model("User", userSchema);
 // === Register ===
 app.post("/register", async (req, res) => {
     try {
-        const { username, email, password } = req.body;
+        const { username, email, mobile, password } = req.body;
 
         const existingUser = await User.findOne({ email });
-        if (existingUser) return res.status(400).json({ msg: "User already exists" });
+        if (existingUser) {
+            return res.status(400).json({ success: false, message: "User already exists" });
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const user = new User({ username, email, password: hashedPassword });
-
+        const user = new User({ username, email, mobile, password: hashedPassword });
         await user.save();
-        res.json({ msg: "User registered successfully" });
-        console.log("User registered successfully");
+
+        return res.status(200).json({ success: true, message: "User registered successfully" });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        return res.status(500).json({ success: false, message: err.message });
     }
 });
+
 
 // === Login ===
 app.post("/login", async (req, res) => {
@@ -74,17 +77,48 @@ app.post("/login", async (req, res) => {
         const { email, password } = req.body;
 
         const user = await User.findOne({ email });
-        if (!user) return res.status(400).json({ msg: "User not found" });
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: "User not found",
+            });
+        }
 
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ msg: "Invalid credentials" });
+        if (!isMatch) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid credentials",
+            });
+        }
 
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
-        res.json({ token, user: { id: user._id, username: user.username, email: user.email } });
+        const token = jwt.sign(
+            { id: user._id },
+            process.env.JWT_SECRET,
+            { expiresIn: "1h" }
+        );
+
+        res.json({
+            success: true,
+            message: "Login successful",
+            token,
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                mobile: user.mobile,
+            },
+        });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("Login error:", err);
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: err.message,
+        });
     }
 });
+
 
 // === Protected Route Example ===
 app.get("/profile", authMiddleware, async (req, res) => {
@@ -107,4 +141,4 @@ function authMiddleware(req, res, next) {
 }
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, "0.0.0.0" ,() => console.log(`Server running on port ${PORT}`));

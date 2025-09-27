@@ -8,11 +8,10 @@ import cors from "cors";
 
 dotenv.config();
 const app = express();
-app.use(express.json());
 
-// ✅ Enable CORS
-app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Connected to MongoDB Atlas"))
@@ -22,11 +21,14 @@ mongoose.connect(process.env.MONGO_URI)
 // === Simple request logger ===
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-    if (Object.keys(req.body).length > 0) {
+
+    if (req.body && Object.keys(req.body).length > 0) {
         console.log("Body:", req.body);
     }
+
     next();
 });
+
 
 
 // === User Model ===
@@ -76,7 +78,7 @@ app.post("/login", async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase() });
         if (!user) {
             return res.status(400).json({
                 success: false,
@@ -119,6 +121,40 @@ app.post("/login", async (req, res) => {
     }
 });
 
+// === Update ===
+app.put("/update-profile", async (req, res) => {
+    try {
+        const { id, name, email, mobile } = req.body;
+
+        const updated = await User.findByIdAndUpdate(
+            id,
+            { username: name, email: email.toLowerCase(), mobile },
+            { new: true, runValidators: true }
+        );
+
+
+        if (!updated) {
+            console.log("⚠️ No user found with this ID");
+
+            res.status(400).json({
+                success: false,
+                message: "User Not Found",
+                user: updated,
+            });
+        } else {
+            console.log("✅ Updated User:", updated);
+
+            res.json({
+                success: true,
+                message: "Profile updated successfully",
+                user: updated,
+            });
+        }
+
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
 
 // === Protected Route Example ===
 app.get("/profile", authMiddleware, async (req, res) => {

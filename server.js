@@ -5,6 +5,9 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import cors from "cors";
+import authRoutes from "./routes/authRoutes.js";
+
+import User from "./model/userModel.js";
 
 dotenv.config();
 const app = express();
@@ -12,6 +15,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use("/auth", authRoutes);
 
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Connected to MongoDB Atlas"))
@@ -29,17 +34,6 @@ app.use((req, res, next) => {
     next();
 });
 
-
-
-// === User Model ===
-const userSchema = new mongoose.Schema({
-    username: { type: String, required: true, unique: true },
-    email:    { type: String, required: true, unique: true },
-    mobile:   { type: String, required: true },
-    password: { type: String, required: true },
-});
-
-const User = mongoose.model("User", userSchema);
 
 // Debug: Print all users on server start
 (async () => {
@@ -100,16 +94,14 @@ app.post("/login", async (req, res) => {
             { expiresIn: "1h" }
         );
 
+        // Remove sensitive data before sending
+        const { password: pwd, otp, otpExpires, ...userData } = user.toObject();
+
         res.json({
             success: true,
             message: "Login successful",
             token,
-            user: {
-                id: user._id,
-                username: user.username,
-                email: user.email,
-                mobile: user.mobile,
-            },
+            user: userData,
         });
     } catch (err) {
         console.error("Login error:", err);
@@ -120,6 +112,7 @@ app.post("/login", async (req, res) => {
         });
     }
 });
+
 
 // === Update ===
 app.put("/update-profile", async (req, res) => {
